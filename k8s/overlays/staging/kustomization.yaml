@@ -1,0 +1,59 @@
+# QIT-STAGING: namespace qit-staging, NodePort 30081, database qit_staging_db.
+# Image tags here are changed ONLY by the "Promote to staging" workflow (takes the tag running on dev).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: qit-staging
+resources:
+  - namespace.yaml
+  - storage.yaml
+  - ../../base
+components:
+  - ../../components/uploads   # file storage for the knowledge base
+images:
+  - name: qit-backend
+    newName: 8f1f0d66dd/qit-backend
+    newTag: not-deployed-yet
+  - name: qit-frontend
+    newName: 8f1f0d66dd/qit-frontend
+    newTag: not-deployed-yet
+patches:
+  - target:
+      kind: ConfigMap
+      name: qit-backend-config
+    patch: |-
+      - op: replace
+        path: /data/DB_NAME
+        value: qit_staging_db
+      - op: replace
+        path: /data/APP_ENV
+        value: staging
+      - op: replace
+        path: /data/SEED_DEMO_USERS
+        value: "false"
+  - target:
+      kind: Service
+      name: qit-frontend
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/nodePort
+        value: 30081
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: qit-backend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: qit-frontend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2

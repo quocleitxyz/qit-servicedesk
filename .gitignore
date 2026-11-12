@@ -1,0 +1,26 @@
+# Bien moi truong / bi mat
+.env
+*.env
+!.env.example
+k8s/secrets.yaml
+*.kubeconfig
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node / frontend
+node_modules/
+dist/
+*.tsbuildinfo
+
+# IDE / OS
+.vscode/
+.idea/
+.vs/
+.DS_Store
+Thumbs.db
+*.log

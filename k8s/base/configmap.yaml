@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qit-backend-config
+  labels:
+    app.kubernetes.io/part-of: qit
+data:
+  DB_HOST: qit-postgres          # Service pointing to the external PostgreSQL server (postgres.yaml)
+  DB_PORT: "5432"
+  DB_NAME: qit_prod_db              # each overlay sets its own database
+  APP_ENV: production
+  JWT_EXPIRE_MINUTES: "480"
+  SEED_DEMO_USERS: "false"       # demo accounts only on dev
+  LOG_LEVEL: INFO
+  UPLOAD_DIR: /data/uploads      # Longhorn volume, see overlays/<env>/storage.yaml
+  MAX_UPLOAD_MB: "50"

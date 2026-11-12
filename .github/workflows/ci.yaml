@@ -1,0 +1,132 @@
+name: QIT CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "k8s/**"
+      - "argocd/**"
+      - "**.md"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: qit-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  test-backend:
+    name: Test backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest
+
+  test-frontend:
+    name: Test frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check and build
+        run: npm run build
+
+  build-push:
+    name: Build & push ${{ matrix.service }}
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: vars
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: ${{ github.event_name != 'pull_request' }}
+          build-args: APP_VERSION=${{ steps.vars.outputs.tag }}
+          tags: |
+            ${{ env.REGISTRY_USER || 'local' }}/qit-${{ matrix.service }}:${{ steps.vars.outputs.tag }}
+            ${{ env.REGISTRY_USER || 'local' }}/qit-${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy-dev:
+    name: Deploy to dev
+    needs: build-push
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set dev image tags
+        env:
+          TAG: ${{ needs.build-push.outputs.tag }}
+        run: |
+          python3 .github/scripts/set_image_tag.py k8s/overlays/dev/kustomization.yaml "$TAG" "$REGISTRY_USER"
+          git diff --stat
+
+      - name: Commit and push
+        env:
+          TAG: ${{ needs.build-push.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Manifests already up to date"
+            exit 0
+          fi
+          git commit -am "chore(dev): deploy ${TAG} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

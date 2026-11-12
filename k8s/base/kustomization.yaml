@@ -1,0 +1,9 @@
+# Shared manifests for every environment. Environment differences live in ../overlays/<env>.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - configmap.yaml
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  - hpa.yaml

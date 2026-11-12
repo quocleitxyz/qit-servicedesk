@@ -1,0 +1,59 @@
+# QIT-PROD: namespace qit-prod, NodePort 30080, database qit_prod_db.
+# Image tags here are changed ONLY by the "Promote to prod" workflow (takes the tag running on staging).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: qit-prod
+resources:
+  - namespace.yaml
+  - storage.yaml
+  - ../../base
+components:
+  - ../../components/uploads   # file storage for the knowledge base
+images:
+  - name: qit-backend
+    newName: 8f1f0d66dd/qit-backend
+    newTag: not-deployed-yet
+  - name: qit-frontend
+    newName: 8f1f0d66dd/qit-frontend
+    newTag: not-deployed-yet
+patches:
+  - target:
+      kind: ConfigMap
+      name: qit-backend-config
+    patch: |-
+      - op: replace
+        path: /data/DB_NAME
+        value: qit_prod_db
+      - op: replace
+        path: /data/APP_ENV
+        value: production
+      - op: replace
+        path: /data/SEED_DEMO_USERS
+        value: "false"
+  - target:
+      kind: Service
+      name: qit-frontend
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/nodePort
+        value: 30080
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: qit-backend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: qit-frontend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 6

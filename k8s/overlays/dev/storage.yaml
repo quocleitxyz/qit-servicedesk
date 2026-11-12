@@ -1,0 +1,17 @@
+# File storage for knowledge base attachments (dev).
+# A Longhorn volume inside the cluster: ReadWriteMany so every backend replica mounts the same
+# files, replicated across worker nodes by Longhorn.
+# Requires on every node: Longhorn installed + the package nfs-common (Longhorn serves RWX over NFS).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qit-uploads-pvc
+  labels:
+    app.kubernetes.io/part-of: qit
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi

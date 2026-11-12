@@ -1,0 +1,19 @@
+# Optional: expose the frontend through an Ingress controller.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qit
+  namespace: qit-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: qit.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: qit-frontend
+                port:
+                  number: 80

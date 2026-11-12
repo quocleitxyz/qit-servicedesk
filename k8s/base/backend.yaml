@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qit-backend
+  labels:
+    app: qit-backend
+    app.kubernetes.io/part-of: qit
+spec:
+  # replicas managed by HPA (hpa.yaml)
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: qit-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: qit-backend
+    spec:
+      # imagePullSecrets:            # required if the Docker Hub repository is private
+      #   - name: dockerhub-cred
+      containers:
+        - name: backend
+          image: qit-backend   # tag set per environment in overlays/*/kustomization.yaml
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: qit-backend-config
+            - secretRef:
+                name: qit-db-secret        # DB_USER, DB_PASSWORD
+            - secretRef:
+                name: qit-backend-secret   # JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qit-backend
+  labels:
+    app: qit-backend
+    app.kubernetes.io/part-of: qit
+spec:
+  selector:
+    app: qit-backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

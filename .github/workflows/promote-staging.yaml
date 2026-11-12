@@ -1,0 +1,83 @@
+name: Promote to staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to promote (empty = tag currently running on dev)"
+        required: false
+        default: ""
+
+concurrency:
+  group: qit-promote
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote to staging
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG=$(python3 .github/scripts/set_image_tag.py k8s/overlays/dev/kustomization.yaml --get)
+          fi
+          case "$TAG" in
+            sha-*) ;;
+            *) echo "::error::Invalid tag '$TAG' (expected sha-xxxxxxx)"; exit 1 ;;
+          esac
+          CURRENT=$(python3 .github/scripts/set_image_tag.py k8s/overlays/staging/kustomization.yaml --get)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Staging: $CURRENT -> $TAG"
+
+      - name: Verify images exist on Docker Hub
+        env:
+          USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          for repo in qit-backend qit-frontend; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://hub.docker.com/v2/repositories/${USER}/${repo}/tags/${TAG}")
+            if [ "$code" != "200" ]; then
+              echo "::error::${USER}/${repo}:${TAG} not found on Docker Hub (HTTP $code)"
+              exit 1
+            fi
+            echo "OK ${USER}/${repo}:${TAG}"
+          done
+
+      - name: Update staging manifests
+        run: |
+          python3 .github/scripts/set_image_tag.py k8s/overlays/staging/kustomization.yaml "${{ steps.tag.outputs.tag }}"
+
+      - name: Commit and push
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          FROM: ${{ steps.tag.outputs.current }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Staging already runs ${TAG}"
+            exit 0
+          fi
+          git commit -am "chore(staging): promote ${TAG} (from ${FROM}) by ${{ github.actor }} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Summary
+        run: |
+          echo "### Promoted to staging" >> $GITHUB_STEP_SUMMARY
+          echo "- From: \`${{ steps.tag.outputs.current }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- To: \`${{ steps.tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- By: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,59 @@
+# QIT-DEV: namespace qit-dev, NodePort 30082, database qit_dev_db.
+# Image tags here are updated by CI on every push to main.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: qit-dev
+resources:
+  - namespace.yaml
+  - storage.yaml
+  - ../../base
+components:
+  - ../../components/uploads   # file storage for the knowledge base
+images:
+  - name: qit-backend
+    newName: 8f1f0d66dd/qit-backend
+    newTag: not-deployed-yet
+  - name: qit-frontend
+    newName: 8f1f0d66dd/qit-frontend
+    newTag: not-deployed-yet
+patches:
+  - target:
+      kind: ConfigMap
+      name: qit-backend-config
+    patch: |-
+      - op: replace
+        path: /data/DB_NAME
+        value: qit_dev_db
+      - op: replace
+        path: /data/APP_ENV
+        value: dev
+      - op: replace
+        path: /data/SEED_DEMO_USERS
+        value: "true"
+  - target:
+      kind: Service
+      name: qit-frontend
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/nodePort
+        value: 30082
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: qit-backend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: qit-frontend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2

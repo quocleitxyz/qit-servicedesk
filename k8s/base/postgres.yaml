@@ -1,0 +1,30 @@
+# External PostgreSQL (VM outside the cluster).
+# Pods reach it as qit-postgres:5432; change the IP here if the database moves.
+apiVersion: v1
+kind: Service
+metadata:
+  name: qit-postgres
+  labels:
+    app.kubernetes.io/part-of: qit
+spec:
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: qit-postgres-1
+  labels:
+    kubernetes.io/service-name: qit-postgres
+    app.kubernetes.io/part-of: qit
+addressType: IPv4
+ports:
+  - name: postgres
+    port: 5432
+    protocol: TCP
+endpoints:
+  - addresses:
+      - 10.81.10.159

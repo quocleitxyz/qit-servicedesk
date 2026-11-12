@@ -1,0 +1,30 @@
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Knowledge base attachments: the backend enforces MAX_UPLOAD_MB (50); nginx allows a little more
+  # so the user gets the API's clear error message instead of a bare 413 page.
+  client_max_body_size 60m;
+
+  location /api/ {
+    proxy_pass ${BACKEND_URL}/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+    proxy_request_buffering off;   # stream uploads to the backend instead of buffering them on disk
+  }
+
+  location = /healthz {
+    access_log off;
+    return 200 "ok\n";
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
