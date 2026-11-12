@@ -12,10 +12,10 @@ components:
 images:
   - name: qit-backend
     newName: 8f1f0d66dd/qit-backend
-    newTag: not-deployed-yet
+    newTag: sha-1a57555
   - name: qit-frontend
     newName: 8f1f0d66dd/qit-frontend
-    newTag: not-deployed-yet
+    newTag: sha-1a57555
 patches:
   - target:
       kind: ConfigMap
